@@ -19,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final app = AppStateScope.of(context);
     final api = ApiClient();
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     return Scaffold(
       appBar: AppBar(title: const Text('Login')),
       body: SafeArea(
@@ -44,14 +45,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _email,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(labelText: 'Email'),
-                          validator: (v) => v != null && v.contains('@') ? null : 'Enter a valid email',
+                          validator: (v) {
+                            final value = v?.trim() ?? '';
+                            if (value.isEmpty) return 'Email is required';
+                            return emailRegex.hasMatch(value) ? null : 'Enter a valid email';
+                          },
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _password,
                           obscureText: true,
                           decoration: const InputDecoration(labelText: 'Password'),
-                          validator: (v) => (v ?? '').length >= 6 ? null : 'Min 6 characters',
+                          validator: (v) {
+                            final value = v ?? '';
+                            if (value.length < 6) return 'Min 6 characters';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 16),
                         SizedBox(
@@ -66,7 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 await api.getMe(); // ensure profile exists
                                 final sub = await api.getCurrentSubscription();
                                 final isPremium = (sub?['profile']?['is_premium'] as bool?) ?? false;
-                                app.login(email: _email.text.trim(), name: null, userId: user.id);
+                                final userName = (await api.getMe())['full_name'] as String?;
+                                app.login(email: _email.text.trim(), name: userName, userId: user.id);
                                 app.setPremium(isPremium);
                                 if (!mounted) return;
                                 Navigator.pushReplacementNamed(context, '/shell');

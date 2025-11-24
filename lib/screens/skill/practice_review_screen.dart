@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../models/practice_review_models.dart';
-import '../../models/question.dart';
 
 enum _ReviewFilter { all, correct, incorrect }
 
 class PracticeReviewScreen extends StatefulWidget {
-  final PracticeSummaryArgs summaryArgs;
-  const PracticeReviewScreen({super.key, required this.summaryArgs});
+  final PracticeSummaryArgs? summaryArgs;
+  final List<ReviewEntry>? entries;
+  final String? title;
+  const PracticeReviewScreen({super.key, this.summaryArgs, this.entries, this.title})
+      : assert(summaryArgs != null || entries != null);
 
   @override
   State<PracticeReviewScreen> createState() => _PracticeReviewScreenState();
@@ -23,7 +25,13 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
   }
 
   List<_ReviewItem> _buildItems() {
-    final remoteList = widget.summaryArgs.completionData?['answers'] as List<dynamic>?;
+    if (widget.entries != null) {
+      return widget.entries!
+          .map((e) => _ReviewItem(prompt: e.prompt, userAnswer: e.userAnswer, isCorrect: e.isCorrect, correctAnswer: e.correctAnswer))
+          .toList();
+    }
+    final args = widget.summaryArgs!;
+    final remoteList = args.completionData?['answers'] as List<dynamic>?;
     final remoteMap = <String, Map<String, dynamic>>{};
     if (remoteList != null) {
       for (final entry in remoteList) {
@@ -32,13 +40,13 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
     }
 
     final List<_ReviewItem> items = [];
-    for (final q in widget.summaryArgs.questions) {
-      final snap = widget.summaryArgs.answers[q.id];
+    for (final q in args.questions) {
+      final snap = args.answers[q.id];
       final remote = remoteMap[q.id];
       final userAnswer = snap?.optionText ?? snap?.answerText ?? remote?['user_answer'] ?? remote?['answer_text'];
       final isCorrect = remote?['is_correct'] as bool? ?? snap?.isCorrect;
       final correctAnswer = remote?['correct_answer'] ?? remote?['correct_option'] ?? remote?['correct_option_text'];
-      items.add(_ReviewItem(question: q, userAnswer: userAnswer, isCorrect: isCorrect, correctAnswer: correctAnswer));
+      items.add(_ReviewItem(prompt: q.prompt, userAnswer: userAnswer, isCorrect: isCorrect, correctAnswer: correctAnswer));
     }
     return items;
   }
@@ -57,7 +65,7 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Review questions')),
+      appBar: AppBar(title: Text(widget.title ?? 'Review questions')),
       body: Column(
         children: [
           Padding(
@@ -103,7 +111,7 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
                               Text('Question ${index + 1}', style: Theme.of(context).textTheme.labelSmall),
                               const SizedBox(height: 6),
                               Text(
-                                item.question.prompt,
+                                item.prompt,
                                 style: Theme.of(context).textTheme.titleMedium,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -152,16 +160,15 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
 }
 
 class _ReviewItem {
-  final Question question;
+  final String prompt;
   final String? userAnswer;
   final bool? isCorrect;
   final String? correctAnswer;
 
   _ReviewItem({
-    required this.question,
+    required this.prompt,
     this.userAnswer,
     this.isCorrect,
     this.correctAnswer,
   });
 }
-

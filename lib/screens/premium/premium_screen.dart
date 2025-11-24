@@ -71,6 +71,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _exp = TextEditingController();
   final _cvc = TextEditingController();
   final api = ApiClient();
+  final _formKey = GlobalKey<FormState>();
+  bool _processing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -81,38 +83,76 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Plan amount: $planText'),
-              const SizedBox(height: 12),
-              TextField(controller: _card, decoration: const InputDecoration(labelText: 'Card number (demo)')),
-              const SizedBox(height: 8),
-              Row(children: [
-                Expanded(child: TextField(controller: _exp, decoration: const InputDecoration(labelText: 'MM/YY'))),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: _cvc, decoration: const InputDecoration(labelText: 'CVC'))),
-              ]),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      final res = await api.confirmPaymentSession(widget.session['id']);
-                      app.setPremium(true);
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment successful. Premium activated.')));
-                      Navigator.popUntil(context, ModalRoute.withName('/shell'));
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment failed: $e')));
-                    }
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Plan amount: $planText'),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _card,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Card number (demo)'),
+                  validator: (v) {
+                    final digits = v?.replaceAll(' ', '') ?? '';
+                    if (digits.length != 16 || int.tryParse(digits) == null) return 'Enter 16-digit card number';
+                    return null;
                   },
-                  child: const Text('Pay now (demo)'),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _exp,
+                      decoration: const InputDecoration(labelText: 'MM/YY'),
+                      validator: (v) {
+                        final value = v?.trim() ?? '';
+                        final reg = RegExp(r'^(0[1-9]|1[0-2])\/\d{2}$');
+                        if (!reg.hasMatch(value)) return 'Invalid';
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _cvc,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'CVC'),
+                      validator: (v) => v != null && RegExp(r'^\d{3}$').hasMatch(v) ? null : '3 digits',
+                    ),
+                  ),
+                ]),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _processing
+                        ? null
+                        : () async {
+                            if (!_formKey.currentState!.validate()) return;
+                            setState(() => _processing = true);
+                            try {
+                              await api.confirmPaymentSession(widget.session['id']);
+                              app.setPremium(true);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment successful. Premium activated.')));
+                              Navigator.popUntil(context, ModalRoute.withName('/shell'));
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment failed: $e')));
+                            } finally {
+                              if (mounted) setState(() => _processing = false);
+                            }
+                          },
+                    child: _processing
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Pay now (demo)'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

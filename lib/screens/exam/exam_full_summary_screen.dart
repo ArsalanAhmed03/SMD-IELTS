@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../skill/practice_review_screen.dart';
+import '../../models/practice_review_models.dart';
 
 class ExamFullSummaryScreen extends StatelessWidget {
   final Map<String, dynamic> summary;
@@ -30,20 +32,69 @@ class ExamFullSummaryScreen extends StatelessWidget {
                   itemCount: sections.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
-                    final s = sections[i];
+                    final section = sections[i];
+                    final slug = (section['skill_slug'] as String?) ?? 'section';
+                    final answers = List<Map<String, dynamic>>.from(section['answers'] ?? const []);
                     return Card(
-                      child: ExpansionTile(
-                        title: Text((s['skill_slug'] as String).toUpperCase()),
-                        subtitle: Text('Time ${(s['time_taken_seconds'] ?? 0) / 60 ~/ 1} min • ${s['total_questions'] ?? 0} Q • ${(s['correct_questions'] ?? 0)} correct'),
-                        children: [
-                          if (s['answers'] != null)
-                            ...List<Widget>.from((s['answers'] as List).map((a) => ListTile(
-                                  title: Text(a['prompt'] ?? ''),
-                                  subtitle: Text('Your answer: ${a['user_answer'] ?? '-'}'),
-                                  trailing: Icon(a['is_correct'] == true ? Icons.check_circle : Icons.cancel, color: a['is_correct'] == true ? Colors.green : Colors.red),
-                                ))),
-                          const SizedBox(height: 8),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: ExpansionTile(
+                          title: Text(slug.toUpperCase()),
+                          subtitle: Text('Time ${(section['time_taken_seconds'] ?? 0) / 60 ~/ 1} min · ${section['total_questions'] ?? 0} Q · ${(section['correct_questions'] ?? 0)} correct'),
+                          children: [
+                            if (answers.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.all(12.0),
+                                child: Text('No answers recorded'),
+                              )
+                            else
+                              ...answers.map((a) {
+                                final isCorrect = a['is_correct'] == true;
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: (isCorrect ? Colors.green : Colors.red).withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(a['prompt'] ?? '', style: Theme.of(context).textTheme.titleSmall),
+                                      const SizedBox(height: 4),
+                                      Text('Your answer: ${a['user_answer'] ?? a['answer_text'] ?? '-'}'),
+                                      if ((a['correct_answer'] ?? a['correct_option_text']) != null)
+                                        Text('Correct: ${a['correct_answer'] ?? a['correct_option_text']}', style: const TextStyle(color: Colors.green)),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: answers.isEmpty
+                                    ? null
+                                    : () {
+                                        final entries = answers
+                                            .map((a) => ReviewEntry(
+                                                  prompt: a['prompt'] ?? '',
+                                                  userAnswer: a['user_answer'] ?? a['answer_text'],
+                                                  correctAnswer: a['correct_answer'] ?? a['correct_option_text'],
+                                                  isCorrect: a['is_correct'] as bool?,
+                                                ))
+                                            .toList();
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PracticeReviewScreen(entries: entries, title: '${slug.toUpperCase()} review'),
+                                          ),
+                                        );
+                                      },
+                                child: const Text('Review section'),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -63,4 +114,3 @@ class ExamFullSummaryScreen extends StatelessWidget {
     );
   }
 }
-

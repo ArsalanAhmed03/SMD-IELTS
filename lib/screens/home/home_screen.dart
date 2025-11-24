@@ -32,18 +32,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<List<dynamic>> _loadQuick() async {
     final skills = await _api.getSkills();
-    final setsPer = await Future.wait(skills.map((s) => _api.getPracticeSetsForSkill(s['slug'])));
+    final setsPer = await Future.wait(
+        skills.map((s) => _api.getPracticeSetsForSkill(s['slug'])));
     return setsPer.expand((e) => e).take(8).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final app = AppStateScope.of(context);
+
+    debugPrint(
+        'app: ${app.displayName}, premium: ${app.isPremium}, results: ${app.results.length}');
     return CustomScrollView(
       slivers: [
         SliverAppBar(
           pinned: true,
-          title: Text('IELTS Prep', style: Theme.of(context).textTheme.titleLarge),
+          title:
+              Text('IELTS Prep', style: Theme.of(context).textTheme.titleLarge),
           actions: const [SizedBox(width: 8)],
         ),
         SliverToBoxAdapter(
@@ -53,9 +58,11 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 12),
-                Text('Welcome back, ${app.displayName ?? 'Learner'}', style: Theme.of(context).textTheme.displayLarge),
+                Text('Welcome back, ${app.displayName ?? 'Learner'}',
+                    style: Theme.of(context).textTheme.displayLarge),
                 const SizedBox(height: 6),
-                Text('Continue your IELTS journey', style: Theme.of(context).textTheme.bodyMedium),
+                Text('Continue your IELTS journey',
+                    style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: kSectionSpacing),
 
                 // Skills Grid/List
@@ -67,10 +74,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       return AsyncMessage(
                         title: 'Failed to load skills',
                         icon: Icons.error_outline,
-                        onRetry: () => setState(() => _skillsFut = _api.getSkills()),
+                        onRetry: () =>
+                            setState(() => _skillsFut = _api.getSkills()),
                       );
                     }
-                    if (!snap.hasData) return const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator());
+                    if (!snap.hasData)
+                      return const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: LinearProgressIndicator());
                     final data = snap.data!;
                     return ListView.separated(
                       shrinkWrap: true,
@@ -91,7 +102,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           subtitle: 'Practice sets',
                           onTap: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => SkillOverviewScreen(skill: skillModel)),
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    SkillOverviewScreen(skill: skillModel)),
                           ),
                         );
                       },
@@ -100,7 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 const SizedBox(height: kSectionSpacing),
-                const SectionHeader(title: 'Quick Practice', icon: Icons.flash_on),
+                const SectionHeader(
+                    title: 'Quick Practice', icon: Icons.flash_on),
                 SizedBox(
                   height: 140,
                   child: FutureBuilder<List<dynamic>>(
@@ -110,13 +124,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         return AsyncMessage(
                           title: 'Failed to load quick practice',
                           icon: Icons.error_outline,
-                          onRetry: () => setState(() => _quickFut = _loadQuick()),
+                          onRetry: () =>
+                              setState(() => _quickFut = _loadQuick()),
                         );
                       }
-                      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                      if (!snap.hasData)
+                        return const Center(child: CircularProgressIndicator());
                       final items = snap.data!;
                       if (items.isEmpty) {
-                        return const AsyncMessage(title: 'No quick practice sets yet', icon: Icons.hourglass_empty);
+                        return const AsyncMessage(
+                            title: 'No quick practice sets yet',
+                            icon: Icons.hourglass_empty);
                       }
                       return ListView.separated(
                         scrollDirection: Axis.horizontal,
@@ -124,7 +142,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (context, index) {
                           final set = items[index];
-                          final locked = (set['is_premium'] as bool) && !app.isPremium;
+
+                          // Be tolerant to null / missing field
+                          final isPremium = set['is_premium'] == true;
+                          final locked = isPremium && !app.isPremium;
+
                           final model = PracticeSet(
                             id: set['id'],
                             skillId: 'skill',
@@ -132,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             levelTag: set['level_tag'] ?? '',
                             questionCount: set['question_count'] ?? 0,
                             estimatedMinutes: set['estimated_minutes'] ?? 0,
-                            isPremium: set['is_premium'] ?? false,
+                            isPremium: isPremium, // keep consistent
                             shortDescription: set['short_description'] ?? '',
                           );
                           return SizedBox(
@@ -145,7 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 if (locked) {
                                   Navigator.pushNamed(context, '/premium');
                                 } else {
-                                  Navigator.pushNamed(context, '/practiceSet', arguments: model.id);
+                                  Navigator.pushNamed(context, '/practiceSet',
+                                      arguments: model.id);
                                 }
                               },
                             ),
@@ -157,35 +180,48 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 const SizedBox(height: kSectionSpacing),
-                const SectionHeader(title: 'Recent Results', icon: Icons.assessment_outlined),
+                const SectionHeader(
+                    title: 'Recent Results', icon: Icons.assessment_outlined),
                 SizedBox(
                   height: 120,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: app.results.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final r = app.results[index];
-                      return Card(
-                        child: Container(
-                          width: 220,
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(r.skillId.toString(), style: Theme.of(context).textTheme.titleMedium),
-                              const SizedBox(height: 6),
-                              Text('${(r.accuracy * 100).round()}% • ${(r.timeTakenSeconds / 60).round()} min'),
-                              const Spacer(),
-                              Text('${r.date.toLocal().toString().split(' ').first}', style: Theme.of(context).textTheme.labelSmall),
-                            ],
-                          ),
+                  child: app.results.isEmpty
+                      ? const AsyncMessage(
+                          title: 'No recent results yet',
+                          icon: Icons.hourglass_empty)
+                      : ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: app.results.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            final r = app.results[index];
+                            return Card(
+                              child: Container(
+                                width: 220,
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(r.skillId.toString(),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                        '${(r.accuracy * 100).round()}% • ${(r.timeTakenSeconds / 60).round()} min'),
+                                    const Spacer(),
+                                    Text(
+                                        '${r.date.toLocal().toString().split(' ').first}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
-
                 const SizedBox(height: kSectionSpacing),
                 Card(
                   child: Padding(
@@ -193,16 +229,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Try full exam simulation', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Try full exam simulation',
+                            style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
-                        Text('Timed sections for Listening, Reading, Writing and Speaking.'),
+                        Text(
+                            'Timed sections for Listening, Reading, Writing and Speaking.'),
                         const SizedBox(height: 12),
                         PrimaryButton(
                           label: 'Open Exam Simulator',
                           icon: Icons.play_arrow_rounded,
                           onPressed: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const ExamIntroScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const ExamIntroScreen()),
                           ),
                         ),
                       ],
@@ -211,13 +250,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 const SizedBox(height: 24),
-                const SectionHeader(title: 'What our learners say', icon: Icons.chat_bubble_outline),
+                const SectionHeader(
+                    title: 'What our learners say',
+                    icon: Icons.chat_bubble_outline),
                 SizedBox(
                   height: 130,
                   child: FutureBuilder<List<dynamic>>(
                     future: _api.getTestimonials(),
                     builder: (context, snap) {
-                      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                      if (!snap.hasData)
+                        return const Center(child: CircularProgressIndicator());
                       final items = snap.data!;
                       return ListView.separated(
                         scrollDirection: Axis.horizontal,
@@ -232,9 +274,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('"${t['quote']}"', maxLines: 3, overflow: TextOverflow.ellipsis),
+                                  Text('"${t['quote']}"',
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis),
                                   const Spacer(),
-                                  Text('- ${t['name']} • ${t['role_or_band']}', style: Theme.of(context).textTheme.labelSmall),
+                                  Text('- ${t['name']} • ${t['role_or_band']}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall),
                                 ],
                               ),
                             ),

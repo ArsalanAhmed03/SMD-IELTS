@@ -18,7 +18,7 @@ class PracticeSummaryScreen extends StatelessWidget {
     final mockSet = practiceSets.where((p) => p.id == result.practiceSetId);
     final skillName = practiceMeta?['skill_name'] ?? (mockSkill.isNotEmpty ? mockSkill.first.name : null);
     final setTitle = practiceMeta?['title'] ?? (mockSet.isNotEmpty ? mockSet.first.title : null);
-    final headerTitle = [skillName, setTitle].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
+    final headerTitle = args.title ?? [skillName, setTitle].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
     final subtitleText = skillName != null
         ? 'Nice work! You finished this $skillName practice set.'
         : 'Nice work! You finished this practice set.';
@@ -72,6 +72,43 @@ class PracticeSummaryScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(subtitleText),
+              const SizedBox(height: 16),
+              if ((args.completionData?['answers'] as List?)?.isNotEmpty ?? false)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Recent answers', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        ...((args.completionData?['answers'] as List).take(3).map((a) {
+                          final isCorrect = a['is_correct'] == true;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(isCorrect ? Icons.check_circle : Icons.cancel, color: isCorrect ? Colors.green : Colors.red, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(a['prompt'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 4),
+                                      Text('You: ${a['user_answer'] ?? a['answer_text'] ?? '—'}'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        })),
+                      ],
+                    ),
+                  ),
+                ),
               const Spacer(),
               Row(
                 children: [
@@ -88,7 +125,7 @@ class PracticeSummaryScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => PracticeReviewScreen(summaryArgs: args),
+                            builder: (_) => PracticeReviewScreen(summaryArgs: args, title: headerTitle),
                           ),
                         );
                       },
@@ -114,4 +151,3 @@ class PracticeSummaryScreen extends StatelessWidget {
     );
   }
 }
-

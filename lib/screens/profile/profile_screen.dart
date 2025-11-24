@@ -4,8 +4,7 @@ import '../../mock/mock_data.dart';
 import '../../core/api_client.dart';
 import '../../core/supabase_client.dart';
 import 'faq_screen.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,8 +16,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _api = ApiClient();
   late Future<Map<String, dynamic>> _profileFut;
-  bool _avatarUploading = false;
-  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -33,6 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final testsCompleted = total.length;
     final avg = total.isEmpty ? 0 : total.map((e) => e.accuracy).reduce((a, b) => a + b) / total.length;
     final email = Supa.currentUser?.email ?? '';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: SafeArea(
@@ -40,7 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           future: _profileFut,
           builder: (context, snap) {
             if (snap.hasError) {
-              return Center(child: Text('Error loading profile'));
+              return const Center(child: Text('Error loading profile'));
             }
             if (!snap.hasData) {
               return const Center(child: CircularProgressIndicator());
@@ -48,31 +46,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final prof = snap.data!;
             final fullName = prof['full_name'] ?? app.displayName ?? 'Learner';
             final bandGoal = prof['band_goal'];
+
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
                 Row(
                   children: [
-                    Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 32,
-                          backgroundImage: prof['avatar_url'] != null ? NetworkImage(prof['avatar_url']) : null,
-                          child: prof['avatar_url'] == null ? const Icon(Icons.person) : null,
-                        ),
-                        Positioned(
-                          bottom: -4,
-                          right: -4,
-                          child: IconButton(
-                            icon: const Icon(Icons.camera_alt, size: 18),
-                            onPressed: _avatarUploading ? null : _changeAvatar,
-                          ),
-                        ),
-                        if (_avatarUploading)
-                          const Positioned.fill(
-                            child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
-                          ),
-                      ],
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundImage: prof['avatar_url'] != null ? NetworkImage(prof['avatar_url']) : null,
+                      child: prof['avatar_url'] == null ? const Icon(Icons.person) : null,
                     ),
                     const SizedBox(width: 12),
                     Expanded(child: Text(fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
@@ -102,8 +85,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: ListTile(
                     leading: const Icon(Icons.edit_outlined),
                     title: const Text('Edit profile'),
-                    subtitle: const Text('Update your name and target band'),
-                    onTap: () => _showEditDialog(context, prof),
+                    subtitle: const Text('Update your name, avatar, and band goal'),
+                    onTap: () async {
+                      final updated = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EditProfileScreen(profile: prof),
+                        ),
+                      );
+                      if (updated == true) {
+                        setState(() => _profileFut = _api.getMe());
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -161,89 +154,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-extension on _ProfileScreenState {
-  Future<void> _changeAvatar() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked == null) return;
-    final userId = Supa.currentUserId;
-    if (userId == null) return;
-    setState(() => _avatarUploading = true);
-    try {
-      final bytes = await picked.readAsBytes();
-      final ext = picked.name.contains('.') ? picked.name.split('.').last : 'jpg';
-      final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$ext';
-      await Supa.client.storage.from('avatars').uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
-      final url = Supa.client.storage.from('avatars').getPublicUrl(path);
-      await _api.updateMe(avatarPath: url);
-      setState(() {
-        _profileFut = _api.getMe();
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar updated')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _avatarUploading = false);
-    }
-  }
-
-  Future<void> _showEditDialog(BuildContext context, Map<String, dynamic> prof) async {
-    final nameCtrl = TextEditingController(text: prof['full_name'] ?? '');
-    final bandCtrl = TextEditingController(text: prof['band_goal']?.toString() ?? '');
-    final form = GlobalKey<FormState>();
-    await showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Edit profile'),
-        content: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Full name'),
-                maxLength: 80,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: bandCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Target band (1–9)'),
-                validator: (v) {
-                  if ((v ?? '').trim().isEmpty) return null;
-                  final val = int.tryParse(v!.trim());
-                  if (val == null || val < 1 || val > 9) return 'Enter 1–9';
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (!form.currentState!.validate()) return;
-              final name = nameCtrl.text.trim();
-              final band = bandCtrl.text.trim().isEmpty ? null : int.parse(bandCtrl.text.trim());
-              try {
-                await _api.updateMe(fullName: name.isEmpty ? null : name, bandGoal: band);
-                setState(() {
-                  _profileFut = _api.getMe();
-                });
-                if (mounted) Navigator.pop(c);
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-}

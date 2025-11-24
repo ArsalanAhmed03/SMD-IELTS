@@ -27,6 +27,7 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
   String? _sectionResultId;
   List<Question> _qs = [];
   bool _loading = true;
+  bool _submitting = false;
   final Map<String, List<String>> _optionIds = {};
 
   @override
@@ -58,7 +59,7 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Question ${index + 1} of ${widget.questions.length}', style: Theme.of(context).textTheme.titleMedium),
+              Text('Question ${index + 1} of ${_qs.length}', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 10),
               if (q.passage != null)
                 Card(child: Padding(padding: const EdgeInsets.all(14.0), child: Text(q.passage!))),
@@ -78,11 +79,35 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                   if (!submitted)
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           if (q.type == QuestionType.mcq) {
-                            // already stored by onSelected
+                            // stored via onSelected
                           } else {
+                            if (controller.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your response.')));
+                              return;
+                            }
                             answers[q.id] = controller.text;
+                          }
+                          if (_sectionResultId != null) {
+                            if (q.type == QuestionType.mcq) {
+                              final selIdx = answers[q.id] as int?;
+                              final ids = _optionIds[q.id] ?? const [];
+                              final optId = (selIdx != null && selIdx < ids.length) ? ids[selIdx] : null;
+                              await _api.submitExamAnswer(
+                                examSessionId: widget.examSessionId,
+                                sectionResultId: _sectionResultId!,
+                                questionId: q.id,
+                                optionId: optId,
+                              );
+                            } else {
+                              await _api.submitExamAnswer(
+                                examSessionId: widget.examSessionId,
+                                sectionResultId: _sectionResultId!,
+                                questionId: q.id,
+                                answerText: controller.text,
+                              );
+                            }
                           }
                           if (index == _qs.length - 1) {
                             _finish();

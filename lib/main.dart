@@ -38,6 +38,7 @@ class IeltsApp extends StatelessWidget {
     return AppStateScope(
       notifier: state,
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'IELTS Prep',
         theme: buildAppTheme(),
         themeMode: ThemeMode.light, // force light while designing

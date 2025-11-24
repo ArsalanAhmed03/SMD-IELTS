@@ -21,6 +21,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     final app = AppStateScope.of(context);
     final api = ApiClient();
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     return Scaffold(
       appBar: AppBar(title: const Text('Create account')),
       body: SafeArea(
@@ -40,7 +41,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (v) => v != null && v.contains('@') ? null : 'Enter a valid email',
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'Email is required';
+                    return emailRegex.hasMatch(value) ? null : 'Enter a valid email';
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

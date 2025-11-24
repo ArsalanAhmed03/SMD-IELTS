@@ -23,6 +23,7 @@ class PracticeSummaryArgs {
   final Map<String, AnswerSnapshot> answers;
   final Map<String, dynamic>? completionData;
   final List<Question> questions;
+  final String? title;
 
   const PracticeSummaryArgs({
     required this.result,
@@ -30,5 +31,20 @@ class PracticeSummaryArgs {
     required this.answers,
     required this.completionData,
     required this.questions,
+    this.title,
+  });
+}
+
+class ReviewEntry {
+  final String prompt;
+  final String? userAnswer;
+  final String? correctAnswer;
+  final bool? isCorrect;
+
+  const ReviewEntry({
+    required this.prompt,
+    this.userAnswer,
+    this.correctAnswer,
+    this.isCorrect,
   });
 }

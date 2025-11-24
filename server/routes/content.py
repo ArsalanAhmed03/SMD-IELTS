@@ -21,7 +21,7 @@ def list_skills():
 def skill_practice_sets(slug: str):
     sb = get_supabase()
 
-    # SAFER: no .single() – fetch rows, then pick first or 404
+    # 1) Fetch skill
     skill_resp = (
         sb.table("skills")
         .select("id,slug,name")
@@ -33,28 +33,42 @@ def skill_practice_sets(slug: str):
         abort(404, description="Skill not found")
     skill = skill_rows[0]
 
-    # Fetch practice sets for this skill
+    # 2) Fetch sets + aggregated question counts in ONE call
+    # Make sure your DB has a relation from questions.practice_set_id to practice_sets.id
     sets_resp = (
         sb.table("practice_sets")
         .select(
-            "id,title,level_tag,short_description,estimated_minutes,is_premium"
+            "id,title,level_tag,short_description,estimated_minutes,is_premium,"
+            "questions(count)"
         )
         .eq("skill_id", skill["id"])
         .eq("is_active", True)
         .order("created_at", desc=True)
         .execute()
     )
-    sets = sets_resp.data or []
 
-    # Add question_count per set
-    for s in sets:
-        count_resp = (
-            sb.table("questions")
-            .select("id", count="exact")
-            .eq("practice_set_id", s["id"])
-            .execute()
+    rows = sets_resp.data or []
+
+    sets = []
+    for row in rows:
+        # Supabase returns something like: "questions": [{"count": 12}]
+        questions_rel = row.get("questions") or []
+        q_count = 0
+        if questions_rel and isinstance(questions_rel, list):
+            first = questions_rel[0] or {}
+            q_count = first.get("count", 0) or 0
+
+        sets.append(
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "level_tag": row.get("level_tag"),
+                "short_description": row.get("short_description"),
+                "estimated_minutes": row.get("estimated_minutes"),
+                "is_premium": row.get("is_premium"),
+                "question_count": q_count,
+            }
         )
-        s["question_count"] = count_resp.count or 0
 
     return jsonify(
         {
