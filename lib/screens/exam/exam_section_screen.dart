@@ -242,11 +242,15 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                       child: Text(q.passage!),
                     ),
                   ),
-                if (q.audioUrl != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: ListeningAudioPlayer(audioPath: q.audioUrl!),
-                  ),
+                  if (q.audioUrl != null) ...[
+                    const SizedBox(height: 8),
+                    ListeningAudioPlayer(
+                      audioPath: q.audioUrl!,
+                      bucket: 'listening-audio',     // same as before
+                      showSpeedControl: true,        // allow speed change
+                      enforcePlayLimit: false,       // no limit in practice
+                    ),
+                  ],
                 const SizedBox(height: 10),
                 Text(
                   q.prompt,

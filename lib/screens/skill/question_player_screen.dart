@@ -185,7 +185,7 @@ void _finish() {
               if (q.audioUrl != null) ...[
                 const SizedBox(height: 8),
                 ListeningAudioPlayer(audioPath: q.audioUrl!),
-              ],
+                ],
               const SizedBox(height: 12),
               Text(q.prompt, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
