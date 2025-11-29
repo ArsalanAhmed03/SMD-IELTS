@@ -16,6 +16,9 @@ dependencies:
   just_audio: ^0.9.36
   audioplayers: ^6.0.0
   image_picker: ^1.0.7
+  record: ^6.1.2
+  path_provider: ^2.1.2
+
 
 dev_dependencies:
   flutter_test:

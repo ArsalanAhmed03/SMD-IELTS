@@ -78,6 +78,55 @@ class ApiClient {
     return List<dynamic>.from(_json(r));
   }
 
+  // AI: Writing evaluations
+  Future<Map<String, dynamic>> createWritingEvalForPractice(String practiceAnswerId, {double targetBand = 7.0}) async {
+    final r = await http.post(
+      _u('/writing-eval/practice/$practiceAnswerId'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'target_band': targetBand}),
+    );
+    return Map<String, dynamic>.from(_json(r));
+  }
+
+  Future<Map<String, dynamic>> createWritingEvalForExam(String examAnswerId, {double targetBand = 7.0}) async {
+    final r = await http.post(
+      _u('/writing-eval/exam/$examAnswerId'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'target_band': targetBand}),
+    );
+    return Map<String, dynamic>.from(_json(r));
+  }
+
+  // AI: Speaking
+  Future<Map<String, dynamic>> createSpeakingAttempt({
+    required String questionId,
+    required String audioPath,
+    required int durationSeconds,
+    required String mode, // 'practice' or 'exam'
+    String? examSessionId,
+    String? examSectionResultId,
+  }) async {
+    final body = <String, dynamic>{
+      'question_id': questionId,
+      'audio_path': audioPath,
+      'duration_seconds': durationSeconds,
+      'mode': mode,
+      if (examSessionId != null) 'exam_session_id': examSessionId,
+      if (examSectionResultId != null) 'exam_section_result_id': examSectionResultId,
+    };
+    final r = await http.post(_u('/speaking-attempts'), headers: _headers(auth: true), body: jsonEncode(body));
+    return Map<String, dynamic>.from(_json(r));
+  }
+
+  Future<Map<String, dynamic>> createSpeakingEvaluation(String attemptId, {double targetBand = 7.0}) async {
+    final r = await http.post(
+      _u('/speaking-eval/$attemptId'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'target_band': targetBand}),
+    );
+    return Map<String, dynamic>.from(_json(r));
+  }
+
   // Exam
   Future<String> createExamSession() async {
     final r = await http.post(_u('/exam-sessions'), headers: _headers(auth: true));

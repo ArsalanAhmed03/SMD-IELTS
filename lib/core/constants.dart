@@ -19,7 +19,7 @@ const Color kSoftDivider = Color(0xFFE5E5E5);
 const Color kHeroGradStart = Color(0xFFFF6A5B);
 const Color kHeroGradEnd = Color(0xFFEF473A);
 
-enum QuestionType { mcq, gapFill, shortText, essay }
+enum QuestionType { mcq, gapFill, shortText, essay, speaking }
 
 // Exam default durations (minutes)
 const int kListeningMinutes = 30;

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../core/app_state.dart';
 import '../../core/constants.dart';
@@ -9,6 +11,9 @@ import '../../models/test_result.dart';
 import '../../core/api_client.dart';
 import '../../widgets/listening_audio_player.dart';
 import '../../models/practice_review_models.dart';
+import '../../widgets/speaking_recorder.dart';
+import '../../core/supabase_client.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 
 class QuestionPlayerScreen extends StatefulWidget {
   final String practiceSetId;
@@ -29,6 +34,10 @@ class _QuestionPlayerScreenState extends State<QuestionPlayerScreen> {
   bool _loading = true;
   final Map<String, List<String>> _optionIds = {};
   final Map<String, AnswerSnapshot> _answerSnapshots = {};
+  final Map<String, Map<String, dynamic>> _writingEvalsByQuestion = {};
+  final Map<String, Map<String, dynamic>> _speakingEvals = {};
+  final Map<String, String> _speakingAttemptIds = {};
+  final Map<String, bool> _speakingAnswerSaved = {};
 
   @override
   void initState() {
@@ -85,6 +94,8 @@ void _hideLoadingDialog() {
         return QuestionType.shortText;
       case 'essay':
         return QuestionType.essay;
+      case 'speaking':
+        return QuestionType.speaking;
       default:
         return QuestionType.mcq;
     }
@@ -98,6 +109,95 @@ void _hideLoadingDialog() {
     if (index > 0) setState(() => index--);
   }
 
+  Future<void> _handleSpeakingRecorded(Question q, SpeakingRecordingResult rec) async {
+    if (_sessionId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session not initialized yet.')),
+        );
+      }
+      return;
+    }
+    final uid = Supa.currentUserId;
+    if (uid == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please sign in to save attempts.')),
+        );
+      }
+      return;
+    }
+    setState(() => _submitting = true);
+
+    try {
+      final bytes = await File(rec.path).readAsBytes();
+      final ext = rec.path.contains('.') ? rec.path.split('.').last : 'm4a';
+      final key = '$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      await Supa.client.storage.from('speaking-attempts').uploadBinary(
+            key,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+
+      final attempt = await _api.createSpeakingAttempt(
+        questionId: q.id,
+        audioPath: key,
+        durationSeconds: rec.durationSeconds,
+        mode: 'practice',
+      );
+      final attemptId = attempt['id'] as String;
+      _speakingAttemptIds[q.id] = attemptId;
+
+      final paResp = await _api.submitPracticeAnswer(
+        _sessionId!,
+        questionId: q.id,
+        answerText: key,
+      );
+      _speakingAnswerSaved[q.id] = true;
+      _answerSnapshots[q.id] = AnswerSnapshot(
+        questionId: q.id,
+        practiceAnswerId: paResp['id'] as String?,
+        answerText: key,
+        isCorrect: paResp['is_correct'] as bool?,
+      );
+      answers[q.id] = key;
+
+      final eval = await _api.createSpeakingEvaluation(attemptId, targetBand: 7.0);
+      _speakingEvals[q.id] = eval;
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Speaking upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _triggerWritingEval(Question q, String practiceAnswerId, String answerText) async {
+    try {
+      final res = await _api.createWritingEvalForPractice(practiceAnswerId, targetBand: 7.0);
+      if (!mounted) return;
+      setState(() {
+        _writingEvalsByQuestion[q.id] = res;
+        final prev = _answerSnapshots[q.id];
+        _answerSnapshots[q.id] = AnswerSnapshot(
+          questionId: q.id,
+          practiceAnswerId: practiceAnswerId,
+          optionId: prev?.optionId,
+          optionText: prev?.optionText,
+          answerText: prev?.answerText ?? answerText,
+          isCorrect: prev?.isCorrect,
+          writingEval: res,
+        );
+      });
+    } catch (e) {
+      debugPrint('Writing eval failed: $e');
+    }
+  }
+
 void _finish() {
   () async {
     _showLoadingDialog();
@@ -106,6 +206,8 @@ void _finish() {
         _sessionId!,
         timeTakenSeconds: estMin * 60,
       );
+
+      debugPrint('completePracticeSession res: $res');
 
       final app = AppStateScope.of(context);
       final stats = (res['stats'] ?? const {}) as Map<String, dynamic>;
@@ -123,6 +225,18 @@ void _finish() {
 
       app.addResult(testResult);
 
+      // Build writing eval map from backend + local map
+      final Map<String, dynamic> writingEvals = {};
+      for (final w in (res['writing_evaluations'] as List? ?? [])) {
+        if (w is Map<String, dynamic>) {
+          final qid = w['question_id'] as String?;
+          if (qid != null) writingEvals[qid] = w;
+        }
+      }
+      writingEvals.addAll(_writingEvalsByQuestion);
+
+      debugPrint('writingEvals assembled in _finish: $writingEvals');
+
       if (!mounted) return;
       _hideLoadingDialog();
 
@@ -136,6 +250,7 @@ void _finish() {
           completionData: res,
           questions: qs,
           title: practice['title'],
+          writingEvaluations: writingEvals,
         ),
       );
     } catch (e) {
@@ -215,6 +330,13 @@ void _finish() {
                                 );
                                 return;
                               }
+                            } else if (q.type == QuestionType.speaking) {
+                              if (!(_speakingAnswerSaved[q.id] ?? false)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please record your answer first.')),
+                                );
+                                return;
+                              }
                             } else {
                               if (controller.text.trim().isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -246,18 +368,21 @@ void _finish() {
                                         ? q.options![selIdx]
                                         : null;
 
-                                final resp = await _api.submitPracticeAnswer(
-                                  _sessionId!,
-                                  questionId: q.id,
-                                  optionId: optId,
-                                );
+                                    final resp = await _api.submitPracticeAnswer(
+                                      _sessionId!,
+                                      questionId: q.id,
+                                      optionId: optId,
+                                    );
 
-                                _answerSnapshots[q.id] = AnswerSnapshot(
-                                  questionId: q.id,
-                                  optionId: optId,
-                                  optionText: optText,
-                                  isCorrect: resp['is_correct'] as bool?,
-                                );
+                                    _answerSnapshots[q.id] = AnswerSnapshot(
+                                      questionId: q.id,
+                                      optionId: optId,
+                                      optionText: optText,
+                                      isCorrect: resp['is_correct'] as bool?,
+                                      writingEval: resp['writing_eval'] as Map<String, dynamic>?,
+                                    );
+                              } else if (q.type == QuestionType.speaking) {
+                                // speaking answer already stored via recorder upload
                               }
 
                               // SUBMIT TEXT/ESSAY
@@ -267,12 +392,21 @@ void _finish() {
                                   questionId: q.id,
                                   answerText: controller.text.trim(),
                                 );
+                                debugPrint('submitPracticeAnswer resp for ${q.id}: $resp');
 
+                                final practiceAnswerId = resp['id'] as String?;
                                 _answerSnapshots[q.id] = AnswerSnapshot(
                                   questionId: q.id,
+                                  practiceAnswerId: practiceAnswerId,
                                   answerText: controller.text.trim(),
                                   isCorrect: resp['is_correct'] as bool?,
+                                  writingEval: resp['writing_eval'] as Map<String, dynamic>?,
+
                                 );
+
+                                if (q.type == QuestionType.essay && practiceAnswerId != null) {
+                                  await _triggerWritingEval(q, practiceAnswerId, controller.text.trim());
+                                }
                               }
 
                               _hideLoadingDialog();
@@ -321,6 +455,82 @@ void _finish() {
         return ShortTextInput(controller: controller);
       case QuestionType.essay:
         return EssayInput(controller: controller);
+      case QuestionType.speaking:
+        return _buildSpeakingBody(q);
     }
+  }
+
+  Widget _buildSpeakingBody(Question q) {
+    final eval = _speakingEvals[q.id];
+    final audioPath = answers[q.id] as String?;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SpeakingRecorder(
+          prompt: 'Tap record to answer aloud.',
+          onRecorded: (rec) => _handleSpeakingRecorded(q, rec),
+        ),
+        if (audioPath != null) ...[
+          const SizedBox(height: 8),
+          ListeningAudioPlayer(
+            audioPath: audioPath,
+            bucket: 'speaking-attempts',
+            showSpeedControl: true,
+          ),
+        ],
+        if (_speakingAttemptIds[q.id] != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(
+              'Attempt saved. You can re-record to replace it.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        const SizedBox(height: 8),
+        if (eval != null) _speakingEvalCard(eval),
+      ],
+    );
+  }
+
+  Widget _speakingEvalCard(Map<String, dynamic> eval) {
+    final overall = eval['overall_band'];
+    final fluency = eval['fluency_and_coherence'];
+    final lexical = eval['lexical_resource'];
+    final grammar = eval['grammatical_range_and_accuracy'];
+    final pron = eval['pronunciation'];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('AI Speaking band: ${_fmtBand(overall)}', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text('Fluency ${_fmtBand(fluency)} / Lexical ${_fmtBand(lexical)} / Grammar ${_fmtBand(grammar)} / Pronunciation ${_fmtBand(pron)}'),
+            if ((eval['feedback_short'] as String?)?.isNotEmpty ?? false) ...[
+              const SizedBox(height: 8),
+              Text(eval['feedback_short'] as String),
+            ],
+            if ((eval['feedback_detailed'] as String?)?.isNotEmpty ?? false) ...[
+              const SizedBox(height: 8),
+              Text(
+                eval['feedback_detailed'] as String,
+                style: const TextStyle(color: Colors.black87),
+              ),
+            ],
+            if ((eval['transcript'] as String?)?.isNotEmpty ?? false) ...[
+              const SizedBox(height: 8),
+              Text('Transcript: ${eval['transcript']}'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmtBand(dynamic v) {
+    if (v == null) return '-';
+    if (v is num) return v.toStringAsFixed(1);
+    return v.toString();
   }
 }
