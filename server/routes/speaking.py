@@ -108,6 +108,7 @@ def create_speaking_evaluation(attempt_id: str):
         mime_type,
         question.get("prompt") or "",
         target_band,
+        attempt.get("duration_seconds"),
     )
 
     row = (
@@ -132,4 +133,10 @@ def create_speaking_evaluation(attempt_id: str):
         .execute()
         .data[0]
     )
-    return jsonify(to_jsonable(row)), 201
+    response_payload = {
+        **to_jsonable(row),
+        "on_topic": eval_res.get("on_topic"),
+        "relevance_score": eval_res.get("relevance_score"),
+        "relevance_feedback": eval_res.get("relevance_feedback"),
+    }
+    return jsonify(response_payload), 201

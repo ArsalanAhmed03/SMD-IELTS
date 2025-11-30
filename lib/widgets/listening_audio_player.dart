@@ -20,7 +20,7 @@ class ListeningAudioPlayer extends StatefulWidget {
     required this.audioPath,
     this.bucket = 'listening-audio',
     this.showSpeedControl = false,
-    this.enforcePlayLimit = false,
+    this.enforcePlayLimit = true,
     this.totalAllowedTime,
   });
 
@@ -45,6 +45,8 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
   Timer? _budgetTimer;
   DateTime? _lastTick;
 
+  bool get _controlsDisabled => _limitReached || _loading;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +61,15 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
       } else if (!playing && _isPlaying) {
         _isPlaying = false;
         _stopBudgetTracking();
+      }
+
+      // Auto-restart when track finishes and time budget remains
+      if (state.processingState == ProcessingState.completed && !_limitReached && widget.enforcePlayLimit) {
+        final max = _maxPlayTime;
+        if (max == null || _playedAccumulated < max) {
+          unawaited(_player.seek(Duration.zero));
+          unawaited(_player.play());
+        }
       }
     });
 
@@ -139,6 +150,7 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
       if (!_limitReached) {
         _limitReached = true;
         if (mounted) {
+          setState(() {});
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('You have reached the maximum listening time for this recording.'),
@@ -168,6 +180,7 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
       if (max != null && _playedAccumulated >= max) {
         _limitReached = true;
         if (mounted) {
+          setState(() {});
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('You have already used your listening allowance for this recording.'),
@@ -210,10 +223,14 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black12,
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4)),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Column(
         children: [
           Row(
@@ -222,12 +239,20 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
                 stream: _player.playerStateStream,
                 builder: (context, snapshot) {
                   final playing = snapshot.data?.playing ?? false;
-                  return IconButton(
-                    icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-                    onPressed: _limitReached ? null : _togglePlayPause,
+                  return ElevatedButton.icon(
+                    onPressed: _controlsDisabled ? null : _togglePlayPause,
+                    icon: Icon(playing ? Icons.pause : Icons.play_arrow, size: 18),
+                    label: Text(playing ? 'Pause' : 'Play'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      backgroundColor: _controlsDisabled ? Colors.grey.shade300 : Theme.of(context).colorScheme.primary,
+                      foregroundColor: _controlsDisabled ? Colors.black87 : Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   );
                 },
               ),
+              const SizedBox(width: 8),
               Expanded(
                 child: StreamBuilder<Duration>(
                   stream: _player.positionStream,
@@ -239,13 +264,29 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
                         : pos.inMilliseconds / dur.inMilliseconds;
                     return Slider(
                       value: v.clamp(0.0, 1.0),
-                      onChanged: (nv) => _seekTo(nv),
+                      onChanged: _controlsDisabled ? null : (nv) => _seekTo(nv),
                     );
                   },
                 ),
               ),
+              const SizedBox(width: 8),
+              StreamBuilder<Duration>(
+                stream: _player.positionStream,
+                builder: (context, snapshot) {
+                  final pos = snapshot.data ?? Duration.zero;
+                  return Text(_formatDuration(pos), style: Theme.of(context).textTheme.labelSmall);
+                },
+              ),
             ],
           ),
+          if (_limitReached)
+            Padding(
+              padding: const EdgeInsets.only(top: 6.0),
+              child: Text(
+                'Listening limit reached for this track.',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ),
           if (widget.showSpeedControl)
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -254,11 +295,13 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
                 const SizedBox(width: 8),
                 DropdownButton<double>(
                   value: _speed,
-                  onChanged: (v) {
-                    if (v != null) {
-                      _changeSpeed(v);
-                    }
-                  },
+                  onChanged: _controlsDisabled
+                      ? null
+                      : (v) {
+                          if (v != null) {
+                            _changeSpeed(v);
+                          }
+                        },
                   items: const [
                     DropdownMenuItem(value: 0.75, child: Text('0.75x')),
                     DropdownMenuItem(value: 1.0, child: Text('1.0x')),
@@ -271,5 +314,12 @@ class _ListeningAudioPlayerState extends State<ListeningAudioPlayer> {
         ],
       ),
     );
+  }
+
+  String _formatDuration(Duration? d) {
+    if (d == null) return '0:00';
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '${m.toString().padLeft(1, '0')}:${s.toString().padLeft(2, '0')}';
   }
 }

@@ -30,6 +30,7 @@ class PracticeSummaryArgs {
   final List<Question> questions;
   final String? title;
   final Map<String, dynamic>? writingEvaluations;
+  final Map<String, dynamic>? speakingEvaluations;
 
   const PracticeSummaryArgs({
     required this.result,
@@ -39,6 +40,7 @@ class PracticeSummaryArgs {
     required this.questions,
     this.title,
     this.writingEvaluations,
+    this.speakingEvaluations,
   });
 }
 
@@ -49,7 +51,9 @@ class ReviewEntry {
   final String? correctAnswer;
   final bool? isCorrect;
   final Map<String, dynamic>? writingEval;
+  final Map<String, dynamic>? speakingEval;
   final QuestionType? type;
+  final List<String>? options;
 
   const ReviewEntry({
     required this.prompt,
@@ -57,6 +61,8 @@ class ReviewEntry {
     this.correctAnswer,
     this.isCorrect,
     this.writingEval,
+    this.speakingEval,
     this.type,
+    this.options,
   });
 }

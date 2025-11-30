@@ -74,6 +74,7 @@ def evaluate_ielts_speaking(
     audio_mime_type: str,
     question_text: str,
     target_band: float,
+    duration_seconds: int | None = None,
 ) -> Dict[str, Any]:
     """
     Evaluate an IELTS speaking attempt (audio) via Gemini using the new google.genai client.
@@ -83,14 +84,20 @@ def evaluate_ielts_speaking(
         "Listen to the provided audio and respond ONLY with JSON using the schema: "
         '{"overall_band": float, "fluency_and_coherence": float, "lexical_resource": float, '
         '"grammatical_range_and_accuracy": float, "pronunciation": float, '
+        '"on_topic": bool, "relevance_score": float, "relevance_feedback": str, '
         '"is_good_enough": bool, "feedback_short": str, "feedback_detailed": str, "transcript": str}. '
+        "Be strict: penalize off-topic answers, very short answers, and missing details. "
+        "Set on_topic=false if the response does not address the question; reduce overall_band accordingly. "
+        "Set is_good_enough=false when the response is below the target_band or off-topic. "
         "No additional commentary or code fences."
     )
 
     user_part = (
         f"Question: {question_text}\n"
         f"Target band threshold: {target_band}\n"
-        "Evaluate the speaking performance and transcribe the response."
+        f"Approximate duration (seconds): {duration_seconds if duration_seconds is not None else 'unknown'}\n"
+        "Evaluate the speaking performance, check whether the answer addresses the question, "
+        "and transcribe the response. Penalize if the response is shorter than 5 seconds or clearly irrelevant."
     )
 
     response = client.models.generate_content(

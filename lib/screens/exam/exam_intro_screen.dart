@@ -100,6 +100,7 @@ class _ExamFlowScreen extends StatefulWidget {
 class _ExamFlowScreenState extends State<_ExamFlowScreen> {
   String? _examId;
   bool _starting = true;
+  DateTime? _flowStartedAt;
 
   final List<Map<String, dynamic>> _sections = const [
     {'slug': 'listening', 'dur': kListeningMinutes},
@@ -116,6 +117,7 @@ class _ExamFlowScreenState extends State<_ExamFlowScreen> {
 
   Future<void> _runFlow() async {
     try {
+      _flowStartedAt = DateTime.now();
       // 1) Create exam session
       final examId = await widget.api.createExamSession();
       if (!mounted) return;
@@ -146,7 +148,8 @@ class _ExamFlowScreenState extends State<_ExamFlowScreen> {
       }
 
       // 3) All sections done → complete exam and show summary directly
-      final summary = await widget.api.completeExamSession(examId);
+      final totalSecs = _flowStartedAt == null ? null : DateTime.now().difference(_flowStartedAt!).inSeconds;
+      final summary = await widget.api.completeExamSession(examId, totalTimeSeconds: totalSecs);
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -174,7 +177,7 @@ class _ExamFlowScreenState extends State<_ExamFlowScreen> {
       body: Center(
         child: _starting
             ? const CircularProgressIndicator()
-            : const Text('Preparing next section...'),
+            : const Text('Compiling results...'),
       ),
     );
   }

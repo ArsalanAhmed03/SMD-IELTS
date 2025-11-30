@@ -261,6 +261,7 @@ def complete_exam(exam_id: str):
         # simple caches to avoid querying the same question over and over
         question_cache: dict[str, dict] = {}
         correct_option_cache: dict[str, dict | None] = {}
+        options_cache: dict[str, list] = {}
 
         for a in answers:
             qid = a["question_id"]
@@ -302,21 +303,27 @@ def complete_exam(exam_id: str):
             if qid not in correct_option_cache:
                 opts = (
                     sb.table("question_options")
-                    .select("text")
+                    .select("text,is_correct,option_index")
                     .eq("question_id", qid)
-                    .eq("is_correct", True)
+                    .order("option_index")
                     .execute()
                     .data
                     or []
                 )
-                correct_opt = opts[0] if opts else None
+                correct_opt = None
+                for o in opts:
+                    if o.get("is_correct"):
+                        correct_opt = o
+                        break
                 correct_option_cache[qid] = correct_opt
+                options_cache[qid] = opts
 
             correct_opt = correct_option_cache[qid]
             correct_text = correct_opt["text"] if correct_opt else None
 
             a["correct_option_text"] = correct_text
             a["correct_answer"] = correct_text  # alias for frontend
+            a["options"] = options_cache.get(qid, [])
 
             # we don't need to expose option_id to the client
             a.pop("option_id", None)
@@ -344,13 +351,26 @@ def complete_exam(exam_id: str):
             or []
         )
         eval_by_attempt = {e["attempt_id"]: e for e in speaking_evals}
+        question_prompt_cache: dict[str, str | None] = {}
 
         speaking_summary = []
         for at in speaking_attempts:
             ev = eval_by_attempt.get(at["id"])
+            qid = at.get("question_id")
+            if qid not in question_prompt_cache:
+                qp = (
+                    sb.table("questions")
+                    .select("prompt")
+                    .eq("id", qid)
+                    .single()
+                    .execute()
+                    .data
+                )
+                question_prompt_cache[qid] = qp.get("prompt") if qp else None
             speaking_summary.append(
                 {
                     **at,
+                    "question_prompt": question_prompt_cache.get(qid),
                     "evaluation": to_jsonable(ev) if ev else None,
                 }
             )

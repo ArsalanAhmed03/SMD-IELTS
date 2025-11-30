@@ -8,21 +8,61 @@ class McqOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       children: [
         for (var i = 0; i < options.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10.0),
-            child: RadioListTile<int>(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              tileColor: Colors.white,
-              value: i,
-              groupValue: selectedIndex,
-              onChanged: (v) => onSelected(v!),
-              title: Text(options[i]),
-            ),
+          _McqTile(
+            label: options[i],
+            selected: selectedIndex == i,
+            onTap: () => onSelected(i),
+            theme: theme,
           ),
       ],
+    );
+  }
+}
+
+class _McqTile extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final ThemeData theme;
+
+  const _McqTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? theme.colorScheme.primary : Colors.grey.shade300;
+    final fillColor = selected ? theme.colorScheme.primary.withOpacity(0.06) : Colors.white;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: Material(
+        color: fillColor,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor, width: 1.4),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

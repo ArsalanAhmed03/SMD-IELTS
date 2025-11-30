@@ -5,6 +5,8 @@ import 'supabase_client.dart';
 class ApiClient {
   final String baseUrl;
   ApiClient({this.baseUrl = 'http://10.0.2.2:5000/api'});
+  // ApiClient({this.baseUrl = 'http://127.0.0.1:5000/api'});
+
 
   Map<String, String> _headers({bool auth = false}) {
     final h = <String, String>{'Content-Type': 'application/json'};

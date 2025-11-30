@@ -26,7 +26,9 @@ class _ReviewItem {
   final bool? isCorrect;
   final String? correctAnswer;
   final Map<String, dynamic>? writingEval;
+  final Map<String, dynamic>? speakingEval;
   final QuestionType? type;
+  final List<String>? options;
 
   _ReviewItem({
     required this.prompt,
@@ -34,7 +36,9 @@ class _ReviewItem {
     this.isCorrect,
     this.correctAnswer,
     this.writingEval,
+    this.speakingEval,
     this.type,
+    this.options,
   });
 }
 
@@ -71,7 +75,9 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
                 isCorrect: e.isCorrect,
                 correctAnswer: e.correctAnswer,
                 writingEval: e.writingEval,
+                speakingEval: e.speakingEval,
                 type: e.type,
+                options: e.options,
               ))
           .toList();
     }
@@ -142,7 +148,9 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
           isCorrect: isCorrect,
           correctAnswer: correctAnswer,
           writingEval: writingEval,
+          speakingEval: writingEvals?[q.id] as Map<String, dynamic>?,
           type: q.type,
+          options: q.options,
         ),
       );
     }
@@ -152,121 +160,76 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _items.where((item) {
-      switch (_filter) {
-        case _ReviewFilter.correct:
-          return item.isCorrect == true;
-        case _ReviewFilter.incorrect:
-          return item.isCorrect == false;
-        case _ReviewFilter.all:
-          return true;
-      }
-    }).toList();
+    // Always show all entries; filter chips removed for cleaner UI
+    final filtered = _items;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.title ?? 'Review questions')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FilterChip(
-                  label: const Text('All'),
-                  selected: _filter == _ReviewFilter.all,
-                  onSelected: (_) => setState(() => _filter = _ReviewFilter.all),
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('Correct'),
-                  selected: _filter == _ReviewFilter.correct,
-                  onSelected: (_) => setState(() => _filter = _ReviewFilter.correct),
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('Incorrect'),
-                  selected: _filter == _ReviewFilter.incorrect,
-                  onSelected: (_) => setState(() => _filter = _ReviewFilter.incorrect),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? const Center(child: Text('No answers available'))
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemCount: filtered.length,
-                    itemBuilder: (ctx, i) {
-                      final item = filtered[i];
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Question ${i + 1}',
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                              const SizedBox(height: 6),
-
-                              // PROMPT
-                              Text(
-                                item.prompt,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 10),
-
-                              // USER ANSWER
-                              Text('Your answer: ${item.userAnswer ?? '-'}'),
-
-                              // CORRECT ANSWER (ONLY IF WRONG)
-                              if (item.isCorrect == false &&
-                                  item.correctAnswer != null &&
-                                  item.correctAnswer!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6.0),
-                                  child: Text(
-                                    'Correct answer: ${item.correctAnswer}',
-                                    style: const TextStyle(
-                                      color: Colors.green,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-
-                              const SizedBox(height: 10),
-
-                              // CORRECT/INCORRECT ICON + LABEL
-                              Row(
+      body: filtered.isEmpty
+          ? const Center(child: Text('No answers available'))
+          : ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemCount: filtered.length,
+              itemBuilder: (ctx, i) {
+                final item = filtered[i];
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Question ${i + 1}', style: Theme.of(context).textTheme.labelSmall),
+                        const SizedBox(height: 6),
+                        SelectableText(item.prompt, style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 10),
+                        if (item.type == QuestionType.mcq && (item.options?.isNotEmpty ?? false))
+                          _mcqReview(item)
+                        else if (item.type == QuestionType.speaking && item.speakingEval != null)
+                          _speakingReview(item)
+                        else ...[
+                          Text('Your answer:', style: Theme.of(context).textTheme.bodySmall),
+                          const SizedBox(height: 4),
+                          SelectableText(item.userAnswer ?? '-', style: Theme.of(context).textTheme.bodyMedium),
+                          if (item.isCorrect == false && (item.correctAnswer?.isNotEmpty ?? false))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(
-                                    item.isCorrect == true ? Icons.check_circle : Icons.cancel,
-                                    color: item.isCorrect == true ? Colors.green : Colors.red,
+                                  const Text('Correct answer:', style: TextStyle(color: Colors.green)),
+                                  const SizedBox(height: 2),
+                                  SelectableText(
+                                    item.correctAnswer!,
+                                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(item.isCorrect == true ? 'Correct' : 'Incorrect'),
                                 ],
                               ),
-
-                              if (item.writingEval != null) ...[
-                                const SizedBox(height: 12),
-                                const Divider(),
-                                const SizedBox(height: 8),
-                                _writingEvalSection(item.writingEval!),
-                              ],
-                            ],
-                          ),
+                            ),
+                        ],
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(
+                              item.isCorrect == true ? Icons.check_circle : Icons.cancel,
+                              color: item.isCorrect == true ? Colors.green : Colors.red,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(item.isCorrect == true ? 'Correct' : 'Incorrect'),
+                          ],
                         ),
-                      );
-                    },
+                        if (item.writingEval != null) ...[
+                          const SizedBox(height: 12),
+                          const Divider(),
+                          const SizedBox(height: 8),
+                          _writingEvalSection(item.writingEval!),
+                        ],
+                      ],
+                    ),
                   ),
-          ),
-        ],
-      ),
+                );
+              },
+            ),
     );
   }
 
@@ -316,5 +279,99 @@ class _PracticeReviewScreenState extends State<PracticeReviewScreen> {
     if (v == null) return '-';
     if (v is num) return v.toStringAsFixed(1);
     return v.toString();
+  }
+
+  Widget _mcqReview(_ReviewItem item) {
+    var opts = item.options ?? const [];
+    final user = item.userAnswer?.trim();
+    final correct = item.correctAnswer?.trim();
+
+    // Fallback: if options are missing (e.g., exam summary), build a minimal set from user + correct
+    if (opts.isEmpty) {
+      final tmp = <String>[];
+      if (user != null && user.isNotEmpty) tmp.add(user);
+      if (correct != null && correct.isNotEmpty && !tmp.contains(correct)) tmp.add(correct);
+      opts = tmp;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final opt in opts) ...[
+          const SizedBox(height: 8),
+          _mcqReviewTile(
+            text: opt,
+            isSelected: user != null && user == opt,
+            isCorrect: correct != null && correct == opt,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _mcqReviewTile({required String text, required bool isSelected, required bool isCorrect}) {
+    Color border;
+    if (isCorrect) {
+      border = Colors.green;
+    } else if (isSelected) {
+      border = kBrandPrimary;
+    } else {
+      border = Colors.grey.shade300;
+    }
+    final fill = isCorrect
+        ? Colors.green.withOpacity(0.08)
+        : isSelected
+            ? kBrandPrimary.withOpacity(0.06)
+            : Colors.white;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border, width: 1.4),
+        color: fill,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  Widget _speakingReview(_ReviewItem item) {
+    final eval = item.speakingEval ?? const {};
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if ((eval['transcript'] as String?)?.isNotEmpty ?? false) ...[
+          Text('Transcript', style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 4),
+          Text(eval['transcript'] as String),
+          const SizedBox(height: 10),
+        ],
+        Card(
+          color: Colors.grey.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('AI Speaking band: ${_fmtBand(eval['overall_band'])}', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                Text(
+                  'Fluency ${_fmtBand(eval['fluency_and_coherence'])} / Lexical ${_fmtBand(eval['lexical_resource'])} / Grammar ${_fmtBand(eval['grammatical_range_and_accuracy'])} / Pronunciation ${_fmtBand(eval['pronunciation'])}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if ((eval['feedback_short'] as String?)?.isNotEmpty ?? false) ...[
+                  const SizedBox(height: 8),
+                  Text(eval['feedback_short'] as String),
+                ],
+                if ((eval['feedback_detailed'] as String?)?.isNotEmpty ?? false) ...[
+                  const SizedBox(height: 8),
+                  Text(eval['feedback_detailed'] as String),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
