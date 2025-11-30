@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-from google import genai
+from google.generativeai import genai
 
 # Load .env reliably
 BASE_DIR = Path(__file__).resolve().parent
