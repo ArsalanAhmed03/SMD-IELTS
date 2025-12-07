@@ -46,11 +46,24 @@ class _QuestionPlayerScreenState extends State<QuestionPlayerScreen> {
   int _groupIndex = 0;
   final Map<String, TextEditingController> _controllers = {};
 
+
+  final ScrollController _scrollController = ScrollController();
   @override
   void initState() {
     super.initState();
     _init();
   }
+  void _scrollToTop() {
+  if (_scrollController.hasClients) {
+    _scrollController.jumpTo(0);
+  }
+}
+@override
+void dispose() {
+  _scrollController.dispose();
+  super.dispose();
+}
+
 
 void _showLoadingDialog() {
   showDialog(
@@ -118,16 +131,27 @@ void _hideLoadingDialog() {
     }
   }
 
-  void _next() {
-    if (index < qs.length - 1) setState(() => index++);
+void _next() {
+  if (index < qs.length - 1) {
+    setState(() => index++);
+    _scrollToTop();
   }
+}
 
-  void _prev() {
-    if (index > 0) setState(() => index--);
+void _prev() {
+  if (index > 0) {
+    setState(() => index--);
+    _scrollToTop();
   }
-  void _prevGroup() {
-    if (_groupIndex > 0) setState(() => _groupIndex--);
+}
+
+void _prevGroup() {
+  if (_groupIndex > 0) {
+    setState(() => _groupIndex--);
+    _scrollToTop();
   }
+}
+
 
   Future<void> _handleSpeakingRecorded(Question q, SpeakingRecordingResult rec) async {
     if (_sessionId == null) {
@@ -338,6 +362,7 @@ void _finish() {
               const SizedBox(height: 12),
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: _buildQuestionBody(q, controller),
                 ),
               ),
@@ -452,13 +477,14 @@ void _finish() {
 
       if (showLoader) _hideLoadingDialog();
 
-      if (advance) {
-        if (index == qs.length - 1) {
-          _finish();
-        } else {
-          setState(() => index++);
-        }
+    if (advance) {
+      if (index == qs.length - 1) {
+        _finish();
+      } else {
+        setState(() => index++);
+        _scrollToTop();
       }
+    }
     } catch (e) {
       if (showLoader) _hideLoadingDialog();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -555,6 +581,7 @@ void _finish() {
               ],
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: Column(
                     children: [
                       for (var i = 0; i < group.questions.length; i++) ...[
@@ -646,6 +673,7 @@ void _finish() {
         _finish();
       } else {
         setState(() => _groupIndex++);
+        _scrollToTop();
       }
     } catch (e) {
       _hideLoadingDialog();
@@ -699,6 +727,8 @@ void _finish() {
               const SizedBox(height: 12),
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
+
                   child: Column(
                     children: [
                       for (var i = 0; i < group.questions.length; i++) ...[
@@ -847,6 +877,7 @@ void _finish() {
         _finish();
       } else {
         setState(() => _groupIndex++);
+        _scrollToTop();
       }
     } catch (e) {
       _hideLoadingDialog();

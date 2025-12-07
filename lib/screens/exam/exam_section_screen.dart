@@ -52,11 +52,24 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
   int _groupIndex = 0;
   final Map<String, TextEditingController> _controllers = {};
 
+  final ScrollController _scrollController = ScrollController();
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _init();
   }
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
 
   Future<void> _init() async {
     try {
@@ -377,6 +390,8 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
 
                 Expanded(
                   child: SingleChildScrollView(
+                    controller: _scrollController,
+
                     child: _body(q, controller),
                   ),
                 ),
@@ -385,7 +400,10 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                     OutlinedButton(
                       onPressed: index == 0 || _submitting
                           ? null
-                          : () => setState(() => index--),
+                          : () {
+                              setState(() => index--);
+                              _scrollToTop();
+                            },
                       child: const Text('Previous'),
                     ),
                     const SizedBox(width: 8),
@@ -482,7 +500,8 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
           await _finish();
         } else {
           if (mounted) {
-            setState(() => index++);
+          setState(() => index++);
+          _scrollToTop();
           }
         }
       }
@@ -550,6 +569,8 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                 const SizedBox(height: 10),
                 Expanded(
                   child: SingleChildScrollView(
+                    controller: _scrollController,
+
                     child: Column(
                       children: [
                         for (var i = 0; i < group.questions.length; i++) ...[
@@ -570,10 +591,15 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                 ),
                 Row(
                   children: [
-                    OutlinedButton(
-                      onPressed: _groupIndex == 0 || _submitting ? null : () => setState(() => _groupIndex--),
-                      child: const Text('Previous'),
-                    ),
+                  OutlinedButton(
+                    onPressed: _groupIndex == 0 || _submitting
+                        ? null
+                        : () {
+                            setState(() => _groupIndex--);
+                            _scrollToTop();
+                          },
+                    child: const Text('Previous'),
+                  ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton(
@@ -694,6 +720,8 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
         await _finish();
       } else {
         setState(() => _groupIndex++);
+        _scrollToTop();
+
       }
     } catch (e) {
       if (mounted) {
@@ -747,6 +775,8 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                 ],
                 Expanded(
                   child: SingleChildScrollView(
+                    controller: _scrollController,
+
                     child: Column(
                       children: [
                         for (var i = 0; i < group.questions.length; i++) ...[
@@ -769,10 +799,15 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
                 ),
                 Row(
                   children: [
-                    OutlinedButton(
-                      onPressed: _groupIndex == 0 || _submitting ? null : () => setState(() => _groupIndex--),
-                      child: const Text('Previous'),
-                    ),
+                  OutlinedButton(
+                    onPressed: _groupIndex == 0 || _submitting
+                        ? null
+                        : () {
+                            setState(() => _groupIndex--);
+                            _scrollToTop();
+                          },
+                    child: const Text('Previous'),
+                  ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton(
@@ -835,6 +870,7 @@ class _ExamSectionScreenState extends State<ExamSectionScreen> {
         await _finish();
       } else {
         setState(() => _groupIndex++);
+        _scrollToTop();
       }
     } catch (e) {
       if (mounted) {
